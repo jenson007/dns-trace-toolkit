@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 The format follows Keep a Changelog and the project uses Semantic Versioning.
 
+## [1.1.1] - 2026-11-15
+
+### Added
+- New `dns-policy-hard-reset.ps1` for explicit local hard reset of DNS and browser policy values.
+- Includes WOW6432Node policy paths and post-reset value display for quick verification.
+
 ## [1.1.0] - 2026-11-15
 
 ### Added

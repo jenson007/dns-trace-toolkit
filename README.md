@@ -1,6 +1,6 @@
 # DNS Trace Toolkit
 
-Version: **1.1.0**
+Version: **1.1.1**
 
 Dieses Repository liefert ein PowerShell-Toolkit, um den DNS-Traffic reproduzierbar zu messen und die Wirkung von DNS-Optimierungen per **Vorher/Nachher-Trace** nachzuweisen.
 
@@ -10,6 +10,8 @@ Dieses Repository liefert ein PowerShell-Toolkit, um den DNS-Traffic reproduzier
   Führt Baseline-Trace, setzt DNS-Optimierungen, führt Optimized-Trace aus und erstellt den Vergleichsreport.
 - `dns-trace-compare.ps1`  
   Vergleichsskript, wenn Baseline/Optimized als getrennte Schritte gesteuert werden sollen.
+- `dns-policy-hard-reset.ps1`  
+  Erzwingt lokales Zuruecksetzen der relevanten DNS-/Browser-Policy-Werte inkl. WOW6432Node.
 
 ## Voraussetzungen
 
@@ -50,6 +52,12 @@ PowerShell -ExecutionPolicy Bypass -File ".\dns-trace-all-in-one.ps1" -SnapshotO
 PowerShell -ExecutionPolicy Bypass -File ".\dns-trace-all-in-one.ps1" -ResetOnly -PolicyStatePath ".\my-policy-state.json"
 ```
 
+Hard-Reset der Policy-Werte (wenn Ruecksetzen blockiert erscheint):
+
+```powershell
+PowerShell -ExecutionPolicy Bypass -File ".\dns-policy-hard-reset.ps1"
+```
+
 ## Ergebnisartefakte
 
 Die Ergebnisse liegen unter:
@@ -71,4 +79,4 @@ Semantische Versionierung:
 - `MINOR`: neue, rückwärtskompatible Funktionen
 - `PATCH`: Bugfixes ohne API-/Verhaltensbruch
 
-Aktuelle Version: `v1.1.0`
+Aktuelle Version: `v1.1.1`
