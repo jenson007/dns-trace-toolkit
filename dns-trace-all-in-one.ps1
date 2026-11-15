@@ -9,7 +9,10 @@ param(
     [switch]$DisableBrowserDnsPrefetch = $true,
     [switch]$ClearDnsCacheBeforeEachPhase = $true,
     [switch]$RunGpUpdate = $true,
-    [switch]$RollbackAtEnd
+    [switch]$RollbackAtEnd,
+    [string]$PolicyStatePath = ".\dns-policy-state.json",
+    [switch]$SnapshotOnly,
+    [switch]$ResetOnly
 )
 
 Set-StrictMode -Version Latest
@@ -38,6 +41,94 @@ function Invoke-External {
 function Test-Command {
     param([Parameter(Mandatory = $true)][string]$Name)
     return [bool](Get-Command $Name -ErrorAction SilentlyContinue)
+}
+
+function Resolve-OutputPath {
+    param([Parameter(Mandatory = $true)][string]$Path)
+    return $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($Path)
+}
+
+function Get-RegistryValueSnapshot {
+    param(
+        [Parameter(Mandatory = $true)][string]$RegistryPath,
+        [Parameter(Mandatory = $true)][string]$ValueName
+    )
+
+    try {
+        $item = Get-Item -Path $RegistryPath -ErrorAction Stop
+        $propertyBag = Get-ItemProperty -Path $RegistryPath -Name $ValueName -ErrorAction Stop
+        $kind = $item.GetValueKind($ValueName).ToString()
+        return [pscustomobject]@{
+            Present = $true
+            Value   = $propertyBag.$ValueName
+            Kind    = $kind
+        }
+    } catch {
+        return [pscustomobject]@{
+            Present = $false
+            Value   = $null
+            Kind    = $null
+        }
+    }
+}
+
+function Save-DnsPolicyState {
+    param([Parameter(Mandatory = $true)][string]$Path)
+
+    $state = [pscustomobject]@{
+        SavedAt = (Get-Date).ToString("s")
+        Entries = [pscustomobject]@{
+            DisableSmartNameResolution = Get-RegistryValueSnapshot -RegistryPath "HKLM:\SOFTWARE\Policies\Microsoft\Windows NT\DNSClient" -ValueName "DisableSmartNameResolution"
+            EnableMulticast            = Get-RegistryValueSnapshot -RegistryPath "HKLM:\SOFTWARE\Policies\Microsoft\Windows NT\DNSClient" -ValueName "EnableMulticast"
+            EdgeDnsPrefetchingEnabled  = Get-RegistryValueSnapshot -RegistryPath "HKLM:\SOFTWARE\Policies\Microsoft\Edge" -ValueName "DnsPrefetchingEnabled"
+            ChromeDnsPrefetchingEnabled= Get-RegistryValueSnapshot -RegistryPath "HKLM:\SOFTWARE\Policies\Google\Chrome" -ValueName "DnsPrefetchingEnabled"
+        }
+    }
+
+    $dir = Split-Path -Path $Path -Parent
+    if ($dir -and -not (Test-Path -LiteralPath $dir)) {
+        New-Item -Path $dir -ItemType Directory -Force | Out-Null
+    }
+
+    $state | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $Path -Encoding UTF8
+}
+
+function Set-RegistryValueFromSnapshot {
+    param(
+        [Parameter(Mandatory = $true)][string]$RegistryPath,
+        [Parameter(Mandatory = $true)][string]$ValueName,
+        [Parameter(Mandatory = $true)]$SnapshotEntry
+    )
+
+    if ($SnapshotEntry.Present) {
+        New-Item -Path $RegistryPath -Force | Out-Null
+        $propertyType = if ($SnapshotEntry.Kind) { [string]$SnapshotEntry.Kind } else { "DWord" }
+        New-ItemProperty -Path $RegistryPath -Name $ValueName -PropertyType $propertyType -Value $SnapshotEntry.Value -Force | Out-Null
+    } else {
+        Remove-ItemProperty -Path $RegistryPath -Name $ValueName -ErrorAction SilentlyContinue
+    }
+}
+
+function Restore-DnsPolicyState {
+    param([Parameter(Mandatory = $true)][string]$Path)
+
+    if (-not (Test-Path -LiteralPath $Path)) {
+        throw "Policy-State-Datei nicht gefunden: $Path"
+    }
+
+    $state = Get-Content -LiteralPath $Path -Raw | ConvertFrom-Json
+    if (-not $state.Entries) {
+        throw "Ungueltiges Format in Policy-State-Datei: $Path"
+    }
+
+    Set-RegistryValueFromSnapshot -RegistryPath "HKLM:\SOFTWARE\Policies\Microsoft\Windows NT\DNSClient" -ValueName "DisableSmartNameResolution" -SnapshotEntry $state.Entries.DisableSmartNameResolution
+    Set-RegistryValueFromSnapshot -RegistryPath "HKLM:\SOFTWARE\Policies\Microsoft\Windows NT\DNSClient" -ValueName "EnableMulticast" -SnapshotEntry $state.Entries.EnableMulticast
+    Set-RegistryValueFromSnapshot -RegistryPath "HKLM:\SOFTWARE\Policies\Microsoft\Edge" -ValueName "DnsPrefetchingEnabled" -SnapshotEntry $state.Entries.EdgeDnsPrefetchingEnabled
+    Set-RegistryValueFromSnapshot -RegistryPath "HKLM:\SOFTWARE\Policies\Google\Chrome" -ValueName "DnsPrefetchingEnabled" -SnapshotEntry $state.Entries.ChromeDnsPrefetchingEnabled
+
+    if ($RunGpUpdate -and (Test-Command -Name "gpupdate")) {
+        gpupdate /force | Out-Null
+    }
 }
 
 function Invoke-DnsWorkload {
@@ -180,6 +271,25 @@ function Invoke-CapturePhase {
 
 Assert-Admin
 
+$resolvedPolicyStatePath = Resolve-OutputPath -Path $PolicyStatePath
+
+if ($SnapshotOnly -and $ResetOnly) {
+    throw "SnapshotOnly und ResetOnly koennen nicht gemeinsam verwendet werden."
+}
+
+if ($SnapshotOnly) {
+    Save-DnsPolicyState -Path $resolvedPolicyStatePath
+    Write-Host "Policy-State gespeichert: $resolvedPolicyStatePath" -ForegroundColor Green
+    return
+}
+
+if ($ResetOnly) {
+    Restore-DnsPolicyState -Path $resolvedPolicyStatePath
+    if ($ClearDnsCacheBeforeEachPhase) { Clear-DnsClientCache }
+    Write-Host "Policy-State wiederhergestellt: $resolvedPolicyStatePath" -ForegroundColor Green
+    return
+}
+
 if (-not (Test-Command -Name "pktmon")) {
     throw "pktmon ist nicht verfuegbar."
 }
@@ -187,6 +297,8 @@ if (-not (Test-Command -Name "pktmon")) {
 $timestamp = Get-Date -Format "yyyyMMdd-HHmmss"
 $sessionDir = Join-Path $OutDir $timestamp
 New-Item -Path $sessionDir -ItemType Directory -Force | Out-Null
+
+Save-DnsPolicyState -Path $resolvedPolicyStatePath
 
 Write-Host "Phase 1: Baseline..." -ForegroundColor Cyan
 $baseline = Invoke-CapturePhase -PhaseName "baseline" -DurationSec $BaselineDurationSec -SessionDir $sessionDir
@@ -234,7 +346,7 @@ $summary | Export-Csv -LiteralPath $csvPath -NoTypeInformation -Encoding UTF8
 
 if ($RollbackAtEnd) {
     Write-Host "Rollback der DNS-Optimierung..." -ForegroundColor Yellow
-    Reset-DnsOptimization
+    Restore-DnsPolicyState -Path $resolvedPolicyStatePath
     if ($ClearDnsCacheBeforeEachPhase) { Clear-DnsClientCache }
 }
 
@@ -243,3 +355,4 @@ Write-Host "Fertig." -ForegroundColor Green
 $summary | Format-List
 Write-Host "Summary JSON: $jsonPath"
 Write-Host "Summary CSV : $csvPath"
+Write-Host "Policy-State: $resolvedPolicyStatePath"

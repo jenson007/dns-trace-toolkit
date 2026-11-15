@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 
 The format follows Keep a Changelog and the project uses Semantic Versioning.
 
+## [1.1.0] - 2026-11-15
+
+### Added
+- Policy state snapshot support via `-SnapshotOnly` and `-PolicyStatePath`.
+- Reset-only mode via `-ResetOnly` to restore exactly the previously saved values.
+- Automatic policy-state backup before each normal measurement run.
+
+### Changed
+- `-RollbackAtEnd` now restores the original saved policy state instead of bluntly deleting policy values.
+
 ## [1.0.1] - 2026-11-15
 
 ### Fixed
