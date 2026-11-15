@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 The format follows Keep a Changelog and the project uses Semantic Versioning.
 
+## [1.0.1] - 2026-11-15
+
+### Fixed
+- Suppressed `pktmon` command output inside helper calls so phase results are always single structured objects.
+- Prevented custom workload script output from polluting function return values in `dns-trace-compare.ps1`.
+- Resolved the `QueryPackets` property access error during phase comparison (`baseline/optimized`).
+
 ## [1.0.0] - 2026-11-15
 
 ### Added

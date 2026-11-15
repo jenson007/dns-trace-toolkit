@@ -23,7 +23,7 @@ function Invoke-External {
         [string[]]$Arguments = @()
     )
 
-    & $FilePath @Arguments
+    $null = & $FilePath @Arguments
     if ($LASTEXITCODE -ne 0) {
         throw "Befehl fehlgeschlagen: $FilePath $($Arguments -join ' ') (ExitCode=$LASTEXITCODE)"
     }
@@ -83,7 +83,7 @@ function Invoke-CapturePhase {
     )
 
     if ($WorkloadScriptPath -and (Test-Path -LiteralPath $WorkloadScriptPath)) {
-        & $WorkloadScriptPath
+        & $WorkloadScriptPath | Out-Null
     } else {
         Start-Sleep -Seconds $DurationSec
     }

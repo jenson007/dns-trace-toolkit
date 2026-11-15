@@ -29,7 +29,7 @@ function Invoke-External {
         [string[]]$Arguments = @()
     )
 
-    & $FilePath @Arguments
+    $null = & $FilePath @Arguments
     if ($LASTEXITCODE -ne 0) {
         throw "Befehl fehlgeschlagen: $FilePath $($Arguments -join ' ') (ExitCode=$LASTEXITCODE)"
     }

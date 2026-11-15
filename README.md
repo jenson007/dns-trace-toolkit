@@ -1,6 +1,6 @@
 # DNS Trace Toolkit
 
-Version: **1.0.0**
+Version: **1.0.1**
 
 Dieses Repository liefert ein PowerShell-Toolkit, um den DNS-Traffic reproduzierbar zu messen und die Wirkung von DNS-Optimierungen per **Vorher/Nachher-Trace** nachzuweisen.
 
@@ -52,4 +52,4 @@ Semantische Versionierung:
 - `MINOR`: neue, rückwärtskompatible Funktionen
 - `PATCH`: Bugfixes ohne API-/Verhaltensbruch
 
-Aktuelle Version: `v1.0.0`
+Aktuelle Version: `v1.0.1`
